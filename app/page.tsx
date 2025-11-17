@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect, ChangeEvent } from 'react'
+import React, { useState, useRef, useEffect, ChangeEvent, MouseEvent } from 'react'
 import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag, ChevronUp, ChevronDown, Save } from 'lucide-react'
 
 const Button = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false }: any) => (
@@ -746,7 +746,7 @@ export default function CameraOrganizationApp() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
+                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
                               e.stopPropagation()
                               downloadProjectFiles(project)
                             }}
@@ -756,7 +756,7 @@ export default function CameraOrganizationApp() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
+                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
                               e.stopPropagation()
                               deleteProject(project.id)
                             }}
