@@ -1,3 +1,8 @@
+"use client"
+
+import React, { useState, useRef, useEffect } from 'react'
+import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag } from 'lucide-react'
+
 {
   "name": "camera-organization-app",
   "version": "1.1.0",
