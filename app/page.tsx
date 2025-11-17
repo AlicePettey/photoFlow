@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect, ChangeEvent } from 'react'
-import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag, ChevronUp, ChevronDown } from 'lucide-react'
+import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag, ChevronUp, ChevronDown, Save } from 'lucide-react'
 
 const Button = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false }: any) => (
   <button
@@ -60,7 +60,7 @@ interface Project {
   id: string
   name: string
   tags: string[]
-  currentTag: string
+  currentTags: string[]
   imageCount: number
   lastModified: Date
   images: CapturedImage[]
@@ -73,11 +73,16 @@ interface CapturedImage {
   dataUrl: string
   note: string
   timestamp: Date
-  tag: string
+  tags: string[]
   sequenceNumber: number
 }
 
 const ZOOM_LEVELS = [1, 1.5, 2, 3, 5, 10]
+const STORAGE_KEYS = {
+  PROJECTS: 'camera_app_projects',
+  TEMPLATES: 'camera_app_templates',
+  ACTIVE_PROJECT: 'camera_app_active_project'
+}
 
 export default function CameraOrganizationApp() {
   const [activeTab, setActiveTab] = useState<'camera' | 'projects' | 'settings'>('camera')
@@ -104,9 +109,18 @@ export default function CameraOrganizationApp() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [isNavCollapsed, setIsNavCollapsed] = useState(false)
+  const [selectedTagsForCapture, setSelectedTagsForCapture] = useState<string[]>([])
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    loadFromStorage()
+  }, [])
+
+  useEffect(() => {
+    saveToStorage()
+  }, [projects, templates, activeProject])
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -136,6 +150,61 @@ export default function CameraOrganizationApp() {
   useEffect(() => {
     setZoomLevel(ZOOM_LEVELS[zoomLevelIndex])
   }, [zoomLevelIndex])
+
+  useEffect(() => {
+    if (activeProject && activeProject.currentTags.length > 0) {
+      setSelectedTagsForCapture(activeProject.currentTags)
+    }
+  }, [activeProject])
+
+  const loadFromStorage = () => {
+    try {
+      const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS)
+      const savedTemplates = localStorage.getItem(STORAGE_KEYS.TEMPLATES)
+      const savedActiveProjectId = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROJECT)
+
+      if (savedProjects) {
+        const parsedProjects = JSON.parse(savedProjects).map((p: any) => ({
+          ...p,
+          lastModified: new Date(p.lastModified),
+          images: p.images.map((img: any) => ({
+            ...img,
+            timestamp: new Date(img.timestamp)
+          }))
+        }))
+        setProjects(parsedProjects)
+
+        if (savedActiveProjectId) {
+          const active = parsedProjects.find((p: Project) => p.id === savedActiveProjectId)
+          if (active) {
+            setActiveProject(active)
+          }
+        }
+      }
+
+      if (savedTemplates) {
+        const parsedTemplates = JSON.parse(savedTemplates).map((t: any) => ({
+          ...t,
+          createdAt: new Date(t.createdAt)
+        }))
+        setTemplates(parsedTemplates)
+      }
+    } catch (error) {
+      console.error('Error loading from storage:', error)
+    }
+  }
+
+  const saveToStorage = () => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects))
+      localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(templates))
+      if (activeProject) {
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT, activeProject.id)
+      }
+    } catch (error) {
+      console.error('Error saving to storage:', error)
+    }
+  }
 
   const initializeCamera = async () => {
     try {
@@ -212,20 +281,20 @@ export default function CameraOrganizationApp() {
     }
 
     let projectTags: string[] = []
-    let initialTag = ''
+    let initialTags: string[] = []
     let templateId: string | undefined = undefined
 
     if (selectedTemplateId) {
       const template = templates.find(t => t.id === selectedTemplateId)
       if (template) {
         projectTags = [...template.tags]
-        initialTag = template.tags[0]
+        initialTags = [...template.tags]
         templateId = template.id
       }
     } else if (newProjectTag.trim()) {
       const sanitizedTag = newProjectTag.trim().replace(/[^a-zA-Z0-9-_]/g, '')
       projectTags = [sanitizedTag]
-      initialTag = sanitizedTag
+      initialTags = [sanitizedTag]
     } else {
       alert('Please select a template or enter an initial tag')
       return
@@ -235,7 +304,7 @@ export default function CameraOrganizationApp() {
       id: Date.now().toString(),
       name: newProjectName.trim(),
       tags: projectTags,
-      currentTag: initialTag,
+      currentTags: initialTags,
       imageCount: 0,
       lastModified: new Date(),
       images: [],
@@ -257,6 +326,11 @@ export default function CameraOrganizationApp() {
       return
     }
 
+    if (selectedTagsForCapture.length === 0) {
+      alert('Please select at least one tag')
+      return
+    }
+
     if (!videoRef.current || !canvasRef.current) return
 
     const video = videoRef.current
@@ -270,8 +344,11 @@ export default function CameraOrganizationApp() {
       context.drawImage(video, 0, 0, canvas.width, canvas.height)
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
 
-      const sequenceNumber = activeProject.images.filter(img => img.tag === activeProject.currentTag).length + 1
-      const filename = `${activeProject.currentTag}_${String(sequenceNumber).padStart(4, '0')}.jpg`
+      const tagString = selectedTagsForCapture.sort().join('-')
+      const sequenceNumber = activeProject.images.filter(img => 
+        img.tags.sort().join('-') === tagString
+      ).length + 1
+      const filename = `${tagString}_${String(sequenceNumber).padStart(4, '0')}.jpg`
 
       const newImage: CapturedImage = {
         id: Date.now().toString(),
@@ -279,7 +356,7 @@ export default function CameraOrganizationApp() {
         dataUrl,
         note: '',
         timestamp: new Date(),
-        tag: activeProject.currentTag,
+        tags: [...selectedTagsForCapture],
         sequenceNumber
       }
 
@@ -323,12 +400,29 @@ export default function CameraOrganizationApp() {
     setSelectedImage(null)
   }
 
-  const changeTagFromFlyout = (newTag: string) => {
-    if (!activeProject) return
+  const deleteProject = (projectId: string) => {
+    if (confirm('Delete this project and all its images?')) {
+      setProjects(projects.filter(p => p.id !== projectId))
+      if (activeProject?.id === projectId) {
+        setActiveProject(null)
+      }
+    }
+  }
+
+  const toggleTagSelection = (tag: string) => {
+    if (selectedTagsForCapture.includes(tag)) {
+      setSelectedTagsForCapture(selectedTagsForCapture.filter(t => t !== tag))
+    } else {
+      setSelectedTagsForCapture([...selectedTagsForCapture, tag])
+    }
+  }
+
+  const updateProjectCurrentTags = () => {
+    if (!activeProject || selectedTagsForCapture.length === 0) return
 
     const updatedProject = {
       ...activeProject,
-      currentTag: newTag
+      currentTags: [...selectedTagsForCapture]
     }
 
     setProjects(projects.map(p => p.id === activeProject.id ? updatedProject : p))
@@ -351,13 +445,83 @@ export default function CameraOrganizationApp() {
 
     const updatedProject = {
       ...activeProject,
-      currentTag: sanitizedTag,
       tags: activeProject.tags.includes(sanitizedTag) ? activeProject.tags : [...activeProject.tags, sanitizedTag]
     }
 
     setProjects(projects.map(p => p.id === activeProject.id ? updatedProject : p))
     setActiveProject(updatedProject)
-    setShowTagFlyout(false)
+  }
+
+  const downloadProjectFiles = async (project: Project) => {
+    try {
+      if (!('showDirectoryPicker' in window)) {
+        alert('File System Access API not supported. Images are stored in browser memory. Use a Chromium-based browser for file system access.')
+        downloadManifestOnly(project)
+        return
+      }
+
+      const dirHandle = await (window as any).showDirectoryPicker({
+        mode: 'readwrite'
+      })
+
+      const projectFolderHandle = await dirHandle.getDirectoryHandle(project.name, { create: true })
+
+      for (const image of project.images) {
+        const response = await fetch(image.dataUrl)
+        const blob = await response.blob()
+        const fileHandle = await projectFolderHandle.getFileHandle(image.filename, { create: true })
+        const writable = await fileHandle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+      }
+
+      const manifestContent = generateManifest(project)
+      const manifestBlob = new Blob([manifestContent], { type: 'text/plain' })
+      const manifestHandle = await projectFolderHandle.getFileHandle('manifest.txt', { create: true })
+      const manifestWritable = await manifestHandle.createWritable()
+      await manifestWritable.write(manifestBlob)
+      await manifestWritable.close()
+
+      alert(`Project files saved to folder: ${project.name}`)
+    } catch (error) {
+      console.error('Error saving files:', error)
+      alert('Error saving files. Downloading manifest only.')
+      downloadManifestOnly(project)
+    }
+  }
+
+  const generateManifest = (project: Project): string => {
+    let manifest = `Project: ${project.name}\n`
+    manifest += `Created: ${new Date(project.lastModified).toLocaleString()}\n`
+    manifest += `Total Images: ${project.imageCount}\n`
+    manifest += `Tags: ${project.tags.join(', ')}\n`
+    manifest += `\n${'='.repeat(80)}\n\n`
+
+    project.images.forEach((image, index) => {
+      manifest += `Image ${index + 1}:\n`
+      manifest += `  Filename: ${image.filename}\n`
+      manifest += `  Tags: ${image.tags.join(', ')}\n`
+      manifest += `  Timestamp: ${image.timestamp.toLocaleString()}\n`
+      if (image.note) {
+        manifest += `  Note: ${image.note}\n`
+      }
+      manifest += `\n`
+    })
+
+    return manifest
+  }
+
+  const downloadManifestOnly = (project: Project) => {
+    const manifestContent = generateManifest(project)
+    const blob = new Blob([manifestContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name}_manifest.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const switchCamera = () => {
@@ -375,8 +539,12 @@ export default function CameraOrganizationApp() {
 
   const getNextFilename = () => {
     if (!activeProject) return 'No project selected'
-    const nextNumber = activeProject.images.filter(img => img.tag === activeProject.currentTag).length + 1
-    return `${activeProject.currentTag}_${String(nextNumber).padStart(4, '0')}.jpg`
+    if (selectedTagsForCapture.length === 0) return 'Select tags first'
+    const tagString = selectedTagsForCapture.sort().join('-')
+    const nextNumber = activeProject.images.filter(img => 
+      img.tags.sort().join('-') === tagString
+    ).length + 1
+    return `${tagString}_${String(nextNumber).padStart(4, '0')}.jpg`
   }
 
   return (
@@ -405,7 +573,7 @@ export default function CameraOrganizationApp() {
                     disabled={!activeProject}
                   >
                     <Tag className="w-3 h-3" />
-                    {activeProject?.currentTag || 'N/A'}
+                    {selectedTagsForCapture.length > 0 ? selectedTagsForCapture.join(', ') : 'Select Tags'}
                     <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
@@ -418,6 +586,11 @@ export default function CameraOrganizationApp() {
                   Switch
                 </Button>
               </div>
+              {!isOnline && (
+                <div className="mt-2 px-3 py-1 bg-yellow-500 text-black text-sm rounded-full inline-block">
+                  Offline Mode
+                </div>
+              )}
             </div>
 
             <div className="absolute top-1/2 right-4 -translate-y-1/2 flex flex-col gap-3">
@@ -450,7 +623,7 @@ export default function CameraOrganizationApp() {
                 <button
                   onClick={capturePhoto}
                   className="w-20 h-20 rounded-full bg-white border-4 border-white/50 hover:scale-105 transition-transform active:scale-95"
-                  disabled={!activeProject}
+                  disabled={!activeProject || selectedTagsForCapture.length === 0}
                 />
                 
                 <Button
@@ -469,7 +642,7 @@ export default function CameraOrganizationApp() {
               <div className="absolute inset-0 bg-black/80 flex items-end z-40">
                 <div className="w-full bg-white rounded-t-3xl p-6 max-h-[70vh] overflow-auto">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold">Select Tag</h3>
+                    <h3 className="text-xl font-bold">Select Tags</h3>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -479,13 +652,19 @@ export default function CameraOrganizationApp() {
                     </Button>
                   </div>
 
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      Select one or more tags for your next photos. Images will be named with all selected tags.
+                    </p>
+                  </div>
+
                   <div className="space-y-2 mb-4">
                     {activeProject.tags.map(tag => (
                       <button
                         key={tag}
-                        onClick={() => changeTagFromFlyout(tag)}
+                        onClick={() => toggleTagSelection(tag)}
                         className={`w-full p-4 rounded-lg text-left transition-colors ${
-                          tag === activeProject.currentTag
+                          selectedTagsForCapture.includes(tag)
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 hover:bg-gray-200'
                         }`}
@@ -493,11 +672,11 @@ export default function CameraOrganizationApp() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="font-semibold">{tag}</div>
-                            <div className={`text-sm ${tag === activeProject.currentTag ? 'text-blue-100' : 'text-gray-500'}`}>
-                              {activeProject.images.filter(img => img.tag === tag).length} images
+                            <div className={`text-sm ${selectedTagsForCapture.includes(tag) ? 'text-blue-100' : 'text-gray-500'}`}>
+                              {activeProject.images.filter(img => img.tags.includes(tag)).length} images
                             </div>
                           </div>
-                          {tag === activeProject.currentTag && (
+                          {selectedTagsForCapture.includes(tag) && (
                             <Check className="w-5 h-5" />
                           )}
                         </div>
@@ -505,14 +684,24 @@ export default function CameraOrganizationApp() {
                     ))}
                   </div>
 
-                  <Button
-                    onClick={addCustomTag}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Custom Tag
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={addCustomTag}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Tag
+                    </Button>
+                    <Button
+                      onClick={updateProjectCurrentTags}
+                      className="flex-1"
+                      disabled={selectedTagsForCapture.length === 0}
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Confirm
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -541,16 +730,41 @@ export default function CameraOrganizationApp() {
                   <Card
                     key={project.id}
                     className="cursor-pointer hover:shadow-lg transition-shadow"
-                    onClick={() => {
-                      setActiveProject(project)
-                      setShowGallery(true)
-                    }}
                   >
                     <CardHeader>
-                      <CardTitle>{project.name}</CardTitle>
-                      <CardDescription>
-                        {project.imageCount} images • Tag: {project.currentTag}
-                      </CardDescription>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1" onClick={() => {
+                          setActiveProject(project)
+                          setShowGallery(true)
+                        }}>
+                          <CardTitle>{project.name}</CardTitle>
+                          <CardDescription>
+                            {project.imageCount} images • Active: {project.currentTags.join(', ')}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              downloadProjectFiles(project)
+                            }}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteProject(project.id)
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="flex gap-2 flex-wrap">
@@ -559,6 +773,9 @@ export default function CameraOrganizationApp() {
                             {tag}
                           </span>
                         ))}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-2">
+                        Last modified: {project.lastModified.toLocaleDateString()}
                       </div>
                     </CardContent>
                   </Card>
@@ -588,7 +805,7 @@ export default function CameraOrganizationApp() {
               <CardContent>
                 {templates.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-4">
-                    No templates yet
+                    No templates yet. Create templates to quickly start new projects with predefined tags.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -620,6 +837,35 @@ export default function CameraOrganizationApp() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle>Storage Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Total Projects:</span>
+                    <span className="font-semibold">{projects.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Images:</span>
+                    <span className="font-semibold">
+                      {projects.reduce((sum, p) => sum + p.imageCount, 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Templates:</span>
+                    <span className="font-semibold">{templates.length}</span>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    Data is stored in your browser. Use the download button on each project to save images and manifest to your device.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -712,7 +958,7 @@ export default function CameraOrganizationApp() {
                     <option value="">No template</option>
                     {templates.map(template => (
                       <option key={template.id} value={template.id}>
-                        {template.name}
+                        {template.name} ({template.tags.join(', ')})
                       </option>
                     ))}
                   </select>
@@ -807,18 +1053,22 @@ export default function CameraOrganizationApp() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-md">
             <CardHeader>
-              <CardTitle>Add Note</CardTitle>
+              <CardTitle>Add Note (Optional)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {lastCapturedImage && (
-                <img
-                  src={lastCapturedImage.dataUrl}
-                  alt="Captured"
-                  className="w-full h-48 object-cover rounded"
-                />
+                <div>
+                  <img
+                    src={lastCapturedImage.dataUrl}
+                    alt="Captured"
+                    className="w-full h-48 object-cover rounded mb-2"
+                  />
+                  <p className="text-sm text-gray-600 font-medium">{lastCapturedImage.filename}</p>
+                  <p className="text-xs text-gray-500">Tags: {lastCapturedImage.tags.join(', ')}</p>
+                </div>
               )}
               <Textarea
-                placeholder="Enter notes..."
+                placeholder="Enter notes about this image..."
                 value={currentNote}
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setCurrentNote(e.target.value)}
                 rows={4}
@@ -828,6 +1078,7 @@ export default function CameraOrganizationApp() {
                   Skip
                 </Button>
                 <Button onClick={saveImageWithNote} className="flex-1">
+                  <Check className="w-4 h-4 mr-2" />
                   Save
                 </Button>
               </div>
@@ -842,8 +1093,17 @@ export default function CameraOrganizationApp() {
             <Button variant="ghost" size="sm" onClick={() => setShowGallery(false)}>
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            <h2 className="font-semibold">{activeProject.name}</h2>
-            <div className="w-10" />
+            <div className="text-center">
+              <h2 className="font-semibold">{activeProject.name}</h2>
+              <p className="text-xs text-gray-500">{activeProject.imageCount} images</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadProjectFiles(activeProject)}
+            >
+              <Download className="w-4 h-4" />
+            </Button>
           </div>
 
           <div className="flex-1 overflow-auto p-4">
@@ -867,6 +1127,7 @@ export default function CameraOrganizationApp() {
                     />
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent rounded-b-lg">
                       <p className="text-white text-xs truncate">{image.filename}</p>
+                      <p className="text-white/70 text-xs">{image.tags.join(', ')}</p>
                     </div>
                   </div>
                 ))}
@@ -897,8 +1158,12 @@ export default function CameraOrganizationApp() {
 
           <div className="p-4 bg-black/50">
             <p className="text-white font-semibold">{selectedImage.filename}</p>
+            <p className="text-white/70 text-sm">Tags: {selectedImage.tags.join(', ')}</p>
+            <p className="text-white/70 text-sm">{selectedImage.timestamp.toLocaleString()}</p>
             {selectedImage.note && (
-              <p className="text-white text-sm mt-2">{selectedImage.note}</p>
+              <div className="bg-white/10 rounded p-3 mt-2">
+                <p className="text-white text-sm">{selectedImage.note}</p>
+              </div>
             )}
           </div>
         </div>
