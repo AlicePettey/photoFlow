@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, ChangeEvent } from 'react'
 import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag } from 'lucide-react'
 
 const Button = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false }: any) => (
@@ -422,7 +422,7 @@ export default function CameraOrganizationApp() {
                   max="3"
                   step="0.1"
                   value={zoomLevel}
-                  onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setZoomLevel(parseFloat(e.target.value))}
                   className="w-full"
                 />
               </div>
@@ -669,7 +669,7 @@ export default function CameraOrganizationApp() {
                   id="projectName"
                   placeholder="Building Inspection 2024"
                   value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setNewProjectName(e.target.value)}
                 />
               </div>
 
@@ -679,7 +679,7 @@ export default function CameraOrganizationApp() {
                   <select
                     id="template"
                     value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setSelectedTemplateId(e.target.value)}
                     className="w-full p-2 border rounded-md"
                   >
                     <option value="">No template</option>
@@ -699,7 +699,7 @@ export default function CameraOrganizationApp() {
                     id="projectTag"
                     placeholder="BLDG"
                     value={newProjectTag}
-                    onChange={(e) => setNewProjectTag(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewProjectTag(e.target.value)}
                   />
                 </div>
               )}
@@ -730,7 +730,7 @@ export default function CameraOrganizationApp() {
                   id="templateName"
                   placeholder="Building Inspection"
                   value={newTemplateName}
-                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setNewTemplateName(e.target.value)}
                 />
               </div>
 
@@ -740,7 +740,7 @@ export default function CameraOrganizationApp() {
                   id="templateDescription"
                   placeholder="Standard tags for inspections"
                   value={newTemplateDescription}
-                  onChange={(e) => setNewTemplateDescription(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setNewTemplateDescription(e.target.value)}
                 />
               </div>
 
@@ -752,7 +752,7 @@ export default function CameraOrganizationApp() {
                       <Input
                         placeholder={`Tag ${index + 1}`}
                         value={tag}
-                        onChange={(e) => updateTemplateTag(index, e.target.value)}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => updateTemplateTag(index, e.target.value)}
                       />
                       {newTemplateTags.length > 1 && (
                         <Button variant="outline" size="sm" onClick={() => removeTemplateTag(index)}>
@@ -793,7 +793,7 @@ export default function CameraOrganizationApp() {
               <Textarea
                 placeholder="Enter notes..."
                 value={currentNote}
-                onChange={(e) => setCurrentNote(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setCurrentNote(e.target.value)}
                 rows={4}
               />
               <div className="flex gap-2">
