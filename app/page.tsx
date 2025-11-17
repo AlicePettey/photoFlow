@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect, ChangeEvent } from 'react'
-import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag } from 'lucide-react'
+import { Camera, FolderOpen, Settings, Plus, X, Upload, Trash2, Edit, Check, ChevronLeft, ChevronRight, Download, List, Tag, ChevronUp, ChevronDown } from 'lucide-react'
 
 const Button = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false }: any) => (
   <button
@@ -77,6 +77,8 @@ interface CapturedImage {
   sequenceNumber: number
 }
 
+const ZOOM_LEVELS = [1, 1.5, 2, 3, 5, 10]
+
 export default function CameraOrganizationApp() {
   const [activeTab, setActiveTab] = useState<'camera' | 'projects' | 'settings'>('camera')
   const [projects, setProjects] = useState<Project[]>([])
@@ -97,9 +99,11 @@ export default function CameraOrganizationApp() {
   const [currentNote, setCurrentNote] = useState('')
   const [lastCapturedImage, setLastCapturedImage] = useState<CapturedImage | null>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
+  const [zoomLevelIndex, setZoomLevelIndex] = useState(0)
   const [isOnline, setIsOnline] = useState(true)
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
+  const [isNavCollapsed, setIsNavCollapsed] = useState(false)
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -128,6 +132,10 @@ export default function CameraOrganizationApp() {
       }
     }
   }, [activeTab, facingMode])
+
+  useEffect(() => {
+    setZoomLevel(ZOOM_LEVELS[zoomLevelIndex])
+  }, [zoomLevelIndex])
 
   const initializeCamera = async () => {
     try {
@@ -360,6 +368,11 @@ export default function CameraOrganizationApp() {
     setFacingMode(facingMode === 'user' ? 'environment' : 'user')
   }
 
+  const cycleZoom = () => {
+    const nextIndex = (zoomLevelIndex + 1) % ZOOM_LEVELS.length
+    setZoomLevelIndex(nextIndex)
+  }
+
   const getNextFilename = () => {
     if (!activeProject) return 'No project selected'
     const nextNumber = activeProject.images.filter(img => img.tag === activeProject.currentTag).length + 1
@@ -407,6 +420,15 @@ export default function CameraOrganizationApp() {
               </div>
             </div>
 
+            <div className="absolute top-1/2 right-4 -translate-y-1/2 flex flex-col gap-3">
+              <button
+                onClick={cycleZoom}
+                className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm text-white font-semibold text-sm border-2 border-white/30 hover:bg-black/70 transition-all active:scale-95"
+              >
+                {zoomLevel}x
+              </button>
+            </div>
+
             <div className="absolute bottom-32 left-0 right-0 text-center">
               <div className="text-white text-sm bg-black/50 inline-block px-4 py-2 rounded-full">
                 Next: {getNextFilename()}
@@ -414,20 +436,7 @@ export default function CameraOrganizationApp() {
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70 to-transparent">
-              <div className="mb-4">
-                <Label className="text-white text-xs mb-2 block">Zoom: {zoomLevel.toFixed(1)}x</Label>
-                <input
-                  type="range"
-                  min="1"
-                  max="3"
-                  step="0.1"
-                  value={zoomLevel}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setZoomLevel(parseFloat(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="flex items-center justify-center gap-4">
+              <div className="flex items-center justify-center gap-4 mb-4">
                 <Button
                   onClick={() => setShowTagFlyout(true)}
                   variant="outline"
@@ -617,10 +626,22 @@ export default function CameraOrganizationApp() {
         )}
       </div>
 
-      <div className="border-t bg-white">
+      {activeTab === 'camera' && (
+        <button
+          onClick={() => setIsNavCollapsed(!isNavCollapsed)}
+          className="absolute bottom-16 left-1/2 -translate-x-1/2 z-30 bg-black/50 backdrop-blur-sm text-white p-2 rounded-full hover:bg-black/70 transition-all"
+        >
+          {isNavCollapsed ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
+
+      <div className={`border-t bg-white transition-transform duration-300 ${isNavCollapsed && activeTab === 'camera' ? 'translate-y-full' : 'translate-y-0'}`}>
         <div className="flex items-center justify-around p-2">
           <button
-            onClick={() => setActiveTab('camera')}
+            onClick={() => {
+              setActiveTab('camera')
+              setIsNavCollapsed(false)
+            }}
             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
               activeTab === 'camera' ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
             }`}
@@ -630,7 +651,10 @@ export default function CameraOrganizationApp() {
           </button>
           
           <button
-            onClick={() => setActiveTab('projects')}
+            onClick={() => {
+              setActiveTab('projects')
+              setIsNavCollapsed(false)
+            }}
             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
               activeTab === 'projects' ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
             }`}
@@ -640,7 +664,10 @@ export default function CameraOrganizationApp() {
           </button>
           
           <button
-            onClick={() => setActiveTab('settings')}
+            onClick={() => {
+              setActiveTab('settings')
+              setIsNavCollapsed(false)
+            }}
             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
               activeTab === 'settings' ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
             }`}
@@ -879,3 +906,5 @@ export default function CameraOrganizationApp() {
     </div>
   )
 }
+
+// END OF FILE
